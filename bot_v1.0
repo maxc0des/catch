@@ -1,0 +1,75 @@
+
+from config import utelegram_config
+from config import wifi_config
+
+import utelegram
+import network
+import utime
+import machine
+
+debug = True
+
+# Initialisiere die Pins
+red = machine.Pin(15, machine.Pin.OUT)
+green = machine.Pin(16, machine.Pin.OUT)
+blue = machine.Pin(17, machine.Pin.OUT)
+buzzer = machine.Pin(18, machine.Pin.OUT)
+
+def indicate(mode):
+    if mode == "working":
+        blue.value(1)
+        green.value(0)
+        red.value(0)
+        buzzer.value(0)
+    elif mode == "error":
+        blue.value(0)
+        green.value(0)
+        red.value(1)
+        buzzer.value(1)
+    elif mode == "perfect":
+        blue.value(0)
+        green.value(1)
+        red.value(0)
+        buzzer.value(0)
+    elif mode == "off":
+        blue.value(0)
+        green.value(0)
+        red.value(0)
+        buzzer.value(0)
+    else:
+        print("received unknown mode")
+
+def connectWifi(ssid, password):
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    wlan.connect(ssid, password)
+    print('Verbinden...')
+    while not wlan.isconnected():
+        print(".")
+        indicate("working")
+        time.sleep(0.4)
+        indicate("off")
+    print('Verbindung hergestellt!')
+    #print('Netzwerk-Konfiguration:', wlan.ifconfig())
+    #indicate("perfect")
+
+connectWifi('ssid', 'password')
+
+def reply_unknown(message):
+    bot.send(message['message']['chat']['id'], 'this command is either not known or you are not authorized to use it')
+
+def reply_ping(message):
+    print(message)
+    bot.send(message['message']['chat']['id'], 'pong')
+    
+def reply_setroles(message):
+    print(message)
+    bot.send(message['message']['chat']['id'], 'everybody type their role in the next game')
+
+bot = utelegram.ubot(utelegram_config['token'])
+bot.register('/ping', reply_ping)
+bot.register('/gameconfig', reply_setroles)
+bot.set_default_handler(reply_unknown)
+print('BOT LISTENING')
+indicate('perfect')
+bot.listen()
