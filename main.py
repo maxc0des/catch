@@ -3,14 +3,27 @@ import time
 from tokens import telegram
 from tokens import mqqt_adress
 from devices import deviceIds
+from devices import devices
 
 setup = []
+game_setup = []
 request = []
+
+t = 0
+answer = ''
+do_request = False
 
 bot_token = telegram['bot_token']
 username = mqqt_adress['username']
 io_key = mqqt_adress['io_key']
 bot_api = f'https://api.telegram.org/bot{bot_token}/'
+
+def add_user(user_id, device_id):
+    devices[user_id] = device_id
+    print(devices)
+
+def get_device_id(user_id):
+    return devices.get(user_id)
 
 def get_updates(offset=None):
     url = bot_api + 'getUpdates'
@@ -41,8 +54,8 @@ def send_mqqt(device_adress, action):
         print(f'Fehler bei der Anfrage: Status {response.status_code}, Antwort: {response.text}')
     return response
 
-def request_mqqt(device_adress):
-    feed_key = 'requests'
+def request_mqqt(device_id):
+    feed_key = device_id
     url = f'https://io.adafruit.com/api/v2/{username}/feeds/{feed_key}/data'
     print(url)
     headers = {'X-AIO-Key': io_key}
@@ -63,17 +76,34 @@ def process_messages(text, chat_id):
         if text in deviceIds:
             send_mqqt(text, 'connection requested')
             request.append(text)
+            #do_request = True
             answer = "Thank you! Now press the button on your device so we can finish the setup"
+            add_user(chat_id, text)
+            setup.remove(chat_id)
         else:
             answer = "There is no device with this id"
-        send_message(chat_id, answer)
+    if chat_id in game_setup:
+        try:
+            interval = int(text)
+            action = f'intervall={interval}'
+            print(action)
+            device_address = get_device_id(chat_id)
+            print(device_address)
+            send_mqqt(device_address, action)
+            game_setup.remove(chat_id)
+            answer = "Your game is now set up. Send any /startGame to start."
+        except ValueError:
+            answer = "Please enter a valid number"
+
     if '/start' in text:
         answer = "Welcome! Let's register your device. What is your device id?"
         setup.append(chat_id)
-        send_message(chat_id, answer)
-    if 'ping' in text:
+    elif 'ping' in text:
         answer = "pong"
-        send_message(chat_id, answer)
+    elif '/game' in text:
+        answer = "Ok! Let's start a game. How often should the device send a photo. Enter the number of minutes"
+        game_setup.append(chat_id)
+    send_message(chat_id, answer)
 
 def main():
     offset = None
@@ -87,9 +117,9 @@ def main():
                     text = update['message']['text']
                     process_messages(text, chat_id)
                     offset = update['update_id'] + 1
-        for requests in request:
-            request_mqqt(requests)
-            request.remove(requests)
+        if do_request:
+            for requests in request:
+                request_mqqt(requests)
         time.sleep(1)
 
 if __name__ == '__main__':
