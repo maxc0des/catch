@@ -8,9 +8,9 @@ from devices import devices
 setup = []
 game_setup = []
 request = []
+setup_devices = []
 
 t = 0
-answer = ''
 do_request = False
 
 bot_token = telegram['bot_token']
@@ -64,19 +64,32 @@ def request_mqqt(device_id):
         data = response.json()
         if data:
             print('Empfangene Daten:', data)
+            process_mqqt(data, device_id)
         else:
             print('Keine Daten im Feed vorhanden')
     else:
         print(f'Fehler bei der Anfrage: Status {response.status_code}')
 
+def process_mqqt(data, device_id):
+    if device_id in setup_devices:
+        if isinstance(data, dict):
+            value = data.get('value')  # Using .get() to safely get 'value' from data
+            if value == 'ok':
+                print('Value is ok')
+            else:
+                print('Value is not ok')
+        else:
+            print('Data is not a dictionary:', data)
+
 
 def process_messages(text, chat_id):
     print("new message: ", text)
+    answer = 'something went wrong'  # Ensure 'answer' is always initialized
     if chat_id in setup:
         if text in deviceIds:
             send_mqqt(text, 'connection requested')
             request.append(text)
-            #do_request = True
+            setup_devices.append(text)
             answer = "Thank you! Now press the button on your device so we can finish the setup"
             add_user(chat_id, text)
             setup.remove(chat_id)
@@ -117,9 +130,9 @@ def main():
                     text = update['message']['text']
                     process_messages(text, chat_id)
                     offset = update['update_id'] + 1
-        if do_request:
-            for requests in request:
-                request_mqqt(requests)
+        print(request)
+        for requests in request:
+            request_mqqt(requests)
         time.sleep(1)
 
 if __name__ == '__main__':
