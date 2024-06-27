@@ -54,7 +54,34 @@ def send_mqqt(device_adress, action):
         print(f'Fehler bei der Anfrage: Status {response.status_code}, Antwort: {response.text}')
     return response
 
-def request_mqqt(device_id):
+#def request_mqqt(device_id):
+#   feed_key = device_id
+#    url = f'https://io.adafruit.com/api/v2/{username}/feeds/{feed_key}/data'
+#    print(url)
+#    headers = {'X-AIO-Key': io_key}
+#    response = requests.get(url, headers=headers)
+#    if response.status_code == 200:
+#        data = response.json()
+#        if data:
+#            print('Empfangene Daten:', data)
+#            process_mqqt(data, device_id)
+#       else:
+#            print('Keine Daten im Feed vorhanden')
+#    else:
+#        print(f'Fehler bei der Anfrage: Status {response.status_code}')
+
+#def process_mqqt(data, device_id, search_value):
+#    found = False
+#    for item in data:
+#        if item.get('value') == search_value:
+#            found = True
+#            break
+#    if found:
+#        print('value found')
+#    else:
+#        print('not found')
+
+def request_connection(device_id):
     feed_key = device_id
     url = f'https://io.adafruit.com/api/v2/{username}/feeds/{feed_key}/data'
     print(url)
@@ -64,22 +91,24 @@ def request_mqqt(device_id):
         data = response.json()
         if data:
             print('Empfangene Daten:', data)
-            process_mqqt(data, device_id)
         else:
             print('Keine Daten im Feed vorhanden')
+            return 404
     else:
         print(f'Fehler bei der Anfrage: Status {response.status_code}')
+        return 404
+    found = False
+    for item in data:
+        if item.get('value') == 'connection_granted':
+            found = True
+            break
 
-def process_mqqt(data, device_id):
-    if device_id in setup_devices:
-        if isinstance(data, dict):
-            value = data.get('value')  # Using .get() to safely get 'value' from data
-            if value == 'ok':
-                print('Value is ok')
-            else:
-                print('Value is not ok')
-        else:
-            print('Data is not a dictionary:', data)
+    if found:
+        print('value found')
+        return 200
+    else:
+        print('not found')
+        return 500
 
 
 def process_messages(text, chat_id):
@@ -90,7 +119,7 @@ def process_messages(text, chat_id):
             send_mqqt(text, 'connection requested')
             request.append(text)
             setup_devices.append(text)
-            answer = "Thank you! Now press the button on your device so we can finish the setup"
+            answer = "Thank you! Now press the button on your device so we can finish the setup. Than send /confirm to finish the process"
             add_user(chat_id, text)
             setup.remove(chat_id)
         else:
@@ -116,6 +145,11 @@ def process_messages(text, chat_id):
     elif '/game' in text:
         answer = "Ok! Let's start a game. How often should the device send a photo. Enter the number of minutes"
         game_setup.append(chat_id)
+    elif '/confirm' in text:
+        if request_connection(get_device_id(chat_id)) == 200:
+            answer = 'your device is now ready to use'
+        else:
+            answer = 'something went wrong'
     send_message(chat_id, answer)
 
 def main():
@@ -130,9 +164,9 @@ def main():
                     text = update['message']['text']
                     process_messages(text, chat_id)
                     offset = update['update_id'] + 1
-        print(request)
-        for requests in request:
-            request_mqqt(requests)
+        #print(request)
+        #for requests in request:
+        #    request_mqqt(requests)
         time.sleep(1)
 
 if __name__ == '__main__':
