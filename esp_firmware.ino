@@ -3,25 +3,27 @@
 #include <ArduinoJson.h>
 #include "config.h"
 
-void setup() {
-  Serial.begin(115200);
-  delay(10);
+#define button 14
+#define led_red 25
+#define led_blue 26
+#define led_green 27
+#define cooldown 10000
 
-  // Connect to WiFi
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(WIFI_SSID);
+long last_press = 0;
 
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+void status(String status){
+  if(status == "error") {
+    digitalWrite(led_red, HIGH);
   }
-  Serial.println();
-  Serial.println("WiFi connected");
+  if(status== "working"){
+    digitalWrite(led_green, HIGH);
+  }
+  if(status=="waiting"){
+    digitalWrite(led_blue, HIGH);
+  }
 }
 
-void loop() {
+void getMqtt(){
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
 
@@ -29,7 +31,6 @@ void loop() {
     url += AIO_USERNAME;
     url += "/feeds/";
     url += FEED_KEY;
-    //url += "/data/last";
 
     http.begin(url);
     http.addHeader("X-AIO-Key", AIO_KEY);
@@ -53,7 +54,8 @@ void loop() {
 
       // Extract values
       const char* value = doc["last_value"];
-      const char* created_at = doc["updated_at"];
+      const char* last_update = doc["updated_at"];
+      processMqtt(value, last_update);
       
       // uncomment for debugging
       //Serial.println("Parsed JSON structure:");
@@ -65,8 +67,8 @@ void loop() {
         Serial.println("Value not found in JSON response");
       }
       
-      if (created_at) {
-        Serial.println("last update: " + String(created_at));
+      if (last_update) {
+        Serial.println("last update: " + String(last_update));
       } else {
         Serial.println("Created At not found in JSON response");
       }
@@ -76,9 +78,50 @@ void loop() {
     }
 
     http.end();
-  } else {
+  }
+  else {
     Serial.println("WiFi Disconnected");
   }
+}
 
-  delay(10000);
+void processMqtt(const char* last_value, const char* last_update){
+  if(last_value == "connection requested"){//and last update < currenttime - 5min
+    //sendMqtt("200")
+  }
+  if(last_value.indexOf("game:")!=-1){
+    last_value.remove(0, 5);
+    int time = int(last_value)*1000;
+    print(String(time))
+  }
+}
+
+void setup() {
+  pinMode(led_blue, OUTPUT);
+  pinMode(led_green, OUTPUT);
+  pinMode(led_red, OUTPUT);
+  pinMode(button, INPUT_PULLUP);
+  Serial.begin(115200);
+  delay(10);
+
+  // Connect to WiFi
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(WIFI_SSID);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.println("WiFi connected");
+}
+
+void loop() {
+  if(!digitalRead(button)&&millis()-last_press>cooldown){
+    last_press = millis();
+    status("waiting");
+    getMqtt();
+  }
+  delay(2000);
 }
