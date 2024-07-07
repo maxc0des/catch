@@ -5,6 +5,8 @@ from tokens import telegram
 from tokens import mqtt_adress
 from devices import deviceIds
 from devices import devices
+from devices import users
+from devices import activated_devices
 
 setup = []
 game_setup = []
@@ -13,6 +15,7 @@ setup_devices = []
 feeds = ['device1', 'admin']
 connection_requested = []
 last_message = False
+
 
 bot_token = telegram['bot_token']
 username = mqtt_adress['username']
@@ -31,7 +34,6 @@ def connect_mqtt():
 def connected(client):
     print('Connected to Adafruit IO!')
     
-    # Abonnieren Sie alle Feeds in der Liste
     for feed in feeds:
         print(f'Subscribing to {feed}')
         client.subscribe(feed)
@@ -45,15 +47,18 @@ def message(client, feed_id, payload):
     last_message = (feed_id, payload)
     process_mqtt(feed_id, payload)
 
-def add_user(user_id, device_id):
-    devices[user_id] = device_id
-    print(devices)
-
-def get_device_id(user_id):
-    return devices.get(user_id)
+def get_device(user_id):
+    return users.get(user_id, "Device not found")
 
 def get_user(device_id):
-    return devices.get(device_id, None)
+    return devices.get(device_id, "User not found")
+
+def add_user(user_id, device_id):
+    if user_id in users or device_id in devices:
+        return "User ID or Device ID already exists."
+    users[user_id] = device_id
+    devices[device_id] = user_id
+    return "Data pair added successfully."
 
 def get_updates(offset=None):
     url = bot_api + 'getUpdates'
@@ -83,25 +88,29 @@ def send_mqtt(device_adress, action):
         print(f'Fehler bei der Anfrage: Status {response.status_code}, Antwort: {response.text}')
     return response
 
-def process_mqtt(feed, message):
+def process_mqtt(feed, message): #feed = device id
     print('processing')
     if feed in connection_requested:
         print('in da loop')
         print(message)
         print(type(message))
         chat_id = get_user(feed)
+        print(feed)
         if message == '200':
             print('should work')
-            answer = 'your device was registered and connected to your accound succesfully'
+            activated_devices.append(feed)
+            answer = 'your device was registered and connected to your account succesfully'
+            connection_requested.remove(feed)
+            activated_devices.append(get_user(feed))
         else:
-            answer = 'something went wrong :('
+            answer = 'wait, something went wrong :('
         print(chat_id, answer)
         send_message(chat_id, answer)
     print('not the right loop')
 
 def process_messages(text, chat_id):
     print("new message: ", text)
-    answer = 'something went wrong'  # Ensure 'answer' is always initialized
+    answer = 'wait, i dont know this command :('
     if chat_id in setup:
         if text in deviceIds:
             send_mqtt(text, 'connection requested')
@@ -118,11 +127,11 @@ def process_messages(text, chat_id):
             interval = int(text)
             action = f'intervall={interval}'
             print(action)
-            device_address = get_device_id(chat_id)
+            device_address = get_device(chat_id)
             print(device_address)
             send_mqtt(device_address, action)
             game_setup.remove(chat_id)
-            answer = "Your game is now set up. Send any /startGame to start."
+            answer = "Your game is now set up. /startGame to start."
         except ValueError:
             answer = "Please enter a valid number"
 
@@ -131,9 +140,13 @@ def process_messages(text, chat_id):
         setup.append(chat_id)
     elif 'ping' in text:
         answer = "pong"
+        print(get_user('device1'))
     elif '/game' in text:
-        answer = "Ok! Let's start a game. How often should the device send a photo. Enter the number of minutes"
-        game_setup.append(chat_id)
+        if chat_id in activated_devices:
+            answer = "Ok! Let's start a game. How often should the device send a photo. Enter the number of minutes"
+            game_setup.append(chat_id)
+        else:
+            answer = 'your device is not registered yet. Run /start first'
     send_message(chat_id, answer)
 
 def main():
@@ -149,10 +162,13 @@ def main():
         if 'result' in updates:
             for update in updates['result']:
                 if 'message' in update:
-                    chat_id = update['message']['chat']['id']
-                    text = update['message']['text']
-                    process_messages(text, chat_id)
-                    offset = update['update_id'] + 1
+                    try:
+                        chat_id = update['message']['chat']['id']
+                        text = update['message']['text']
+                        process_messages(text, chat_id)
+                        offset = update['update_id'] + 1
+                    except ValueError:
+                        print('something went wrong')
         time.sleep(1)
 
 if __name__ == '__main__':

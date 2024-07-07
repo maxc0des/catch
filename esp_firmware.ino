@@ -11,19 +11,55 @@
 
 long last_press = 0;
 
-void status(String status){
-  if(status == "error") {
+void status(String status) {
+  digitalWrite(led_red, LOW);
+  digitalWrite(led_green, LOW);
+  digitalWrite(led_blue, LOW);
+
+  if (status == "error") {
     digitalWrite(led_red, HIGH);
-  }
-  if(status== "working"){
+  } else if (status == "working") {
     digitalWrite(led_green, HIGH);
-  }
-  if(status=="waiting"){
+  } else if (status == "waiting") {
     digitalWrite(led_blue, HIGH);
   }
 }
 
-void getMqtt(){
+void sendMqtt(const String &message) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    String url = "https://io.adafruit.com/api/v2/";
+    url += AIO_USERNAME;
+    url += "/feeds/";
+    url += FEED_KEY;
+    url += "/data";
+
+    String postData = "{\"value\":\"" + message + "\"}"; // Replace "25.4" with the value you want to send
+
+    // Specify the content-type and the Adafruit IO key for the HTTP headers
+    http.begin(url);
+    http.addHeader("X-AIO-Key", AIO_KEY);
+    http.addHeader("Content-Type", "application/json");
+
+    // Send the request
+    int httpResponseCode = http.POST(postData);
+
+    // Check the returning code
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("HTTP Response code: " + String(httpResponseCode));
+      Serial.println("Response: " + response);
+    } else {
+      Serial.println("Error on HTTP request");
+    }
+
+    // Free resources
+    http.end();
+  }
+}
+
+void getMqtt() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
 
@@ -78,20 +114,21 @@ void getMqtt(){
     }
 
     http.end();
-  }
-  else {
+  } else {
     Serial.println("WiFi Disconnected");
   }
 }
 
-void processMqtt(const char* last_value, const char* last_update){
-  if(last_value == "connection requested"){//and last update < currenttime - 5min
-    //sendMqtt("200")
+void processMqtt(const char* last_value, const char* last_update) {
+  if (strcmp(last_value, "connection requested") == 0) { // and last update < currenttime - 5min
+    sendMqtt("200");
   }
-  if(last_value.indexOf("game:")!=-1){
-    last_value.remove(0, 5);
-    int time = int(last_value)*1000;
-    print(String(time))
+  if(String(last_value).indexOf("game:")!=-1){
+    String value(last_value);
+    value.remove(0, 5);
+    Serial.println(value);
+    int time = value.toInt()*1000;
+    Serial.println(String(time));
   }
 }
 
@@ -118,7 +155,7 @@ void setup() {
 }
 
 void loop() {
-  if(!digitalRead(button)&&millis()-last_press>cooldown){
+  if (!digitalRead(button) && millis() - last_press > cooldown) {
     last_press = millis();
     status("waiting");
     getMqtt();
