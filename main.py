@@ -38,6 +38,10 @@ def connected(client):
         print(f'Subscribing to {feed}')
         client.subscribe(feed)
 
+    for devices in deviceIds:
+        print(f'Subscribing to {devices}')
+        client.subscribe(devices)
+
 def disconnected(client):
     print('Disconnected from Adafruit IO!')
 
@@ -91,7 +95,6 @@ def send_mqtt(device_adress, action):
 def process_mqtt(feed, message): #feed = device id
     print('processing')
     if feed in connection_requested:
-        print('in da loop')
         print(message)
         print(type(message))
         chat_id = get_user(feed)
@@ -99,39 +102,39 @@ def process_mqtt(feed, message): #feed = device id
         if message == '200':
             print('should work')
             activated_devices.append(feed)
-            answer = 'your device was registered and connected to your account succesfully'
+            answer = 'Your device was registered and connected to your account succesfully'
             connection_requested.remove(feed)
             activated_devices.append(get_user(feed))
         else:
             answer = 'wait, something went wrong :('
         print(chat_id, answer)
         send_message(chat_id, answer)
-    print('not the right loop')
 
 def process_messages(text, chat_id):
-    print("new message: ", text)
-    answer = 'wait, i dont know this command :('
+    message = text
+    print("new message: ", message)
+    answer = 'Wait, i dont know this command :('
     if chat_id in setup:
         if text in deviceIds:
-            send_mqtt(text, 'connection requested')
-            request.append(text)
-            setup_devices.append(text)
+            device_id = message
+            send_mqtt(device_id, 'connection requested')
+            setup_devices.append(device_id)
             answer = "Thank you! Now press the button on your device so we can finish the setup."
-            add_user(chat_id, text)
-            connection_requested.append(text)
+            add_user(chat_id, device_id)
+            connection_requested.append(device_id)
             setup.remove(chat_id)
         else:
             answer = "There is no device with this id"
     if chat_id in game_setup:
         try:
-            interval = int(text)
+            interval = int(message)
             action = f'intervall={interval}'
             print(action)
             device_address = get_device(chat_id)
             print(device_address)
             send_mqtt(device_address, action)
             game_setup.remove(chat_id)
-            answer = "Your game is now set up. /startGame to start."
+            answer = "Perfect, now press the button on your device to start the game"
         except ValueError:
             answer = "Please enter a valid number"
 
@@ -143,33 +146,37 @@ def process_messages(text, chat_id):
         print(get_user('device1'))
     elif '/game' in text:
         if chat_id in activated_devices:
-            answer = "Ok! Let's start a game. How often should the device send a photo. Enter the number of minutes"
+            answer = "Ok! Let's configure your game. How often should the device send a photo. Enter the number of minutes"
             game_setup.append(chat_id)
         else:
-            answer = 'your device is not registered yet. Run /start first'
+            answer = 'Your device is not registered yet. Run /start first'
     send_message(chat_id, answer)
 
 def main():
     offset = None
     while True:
-        global last_message
-        if last_message:
-            feed_id, payload = last_message
-            print(f'Handling new message from {feed_id}: {payload}')
-            last_message = None
-        updates = get_updates(offset)
-        print(offset)
-        if 'result' in updates:
-            for update in updates['result']:
-                if 'message' in update:
-                    try:
-                        chat_id = update['message']['chat']['id']
-                        text = update['message']['text']
-                        process_messages(text, chat_id)
-                        offset = update['update_id'] + 1
-                    except ValueError:
-                        print('something went wrong')
-        time.sleep(1)
+        try:
+            global last_message
+            if last_message:
+                feed_id, payload = last_message
+                print(f'Handling new message from {feed_id}: {payload}')
+                last_message = None
+            updates = get_updates(offset)
+            print(offset)
+            if 'result' in updates:
+                for update in updates['result']:
+                    if 'message' in update:
+                        try:
+                            chat_id = update['message']['chat']['id']
+                            text = update['message']['text']
+                            process_messages(text, chat_id)
+                            offset = update['update_id'] + 1
+                        except ValueError:
+                            print('something went wrong')
+            time.sleep(1)
+        except KeyboardInterrupt:
+            print("stopped the bot")
+            break
 
 if __name__ == '__main__':
     print("programm gestartet")
