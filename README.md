@@ -5,10 +5,10 @@ Catch is an exciting blend of the classic board game Mister X and the real-life 
 ## Current status
 I am currently not working on this project, but still looking forward to pick up the work again in a ew months.
 
-# Current features
+## Current features
 - Telegram bot
 - Backend (Communication between Bot and ESP32)
 
-# Coming soon
+## Coming soon
 - Hard and Software for the ESP32 to send pictures to the Backend
 - Full documentation
